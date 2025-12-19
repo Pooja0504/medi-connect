@@ -20,6 +20,7 @@ jobs:
         with:
           node-version: '18.x'
           cache: 'npm'
+          cache-dependency-path: './medi-connect-backend/package-lock.json'
 
       - name: Install dependencies (Backend)
         working-directory: ./medi-connect-backend
@@ -62,6 +63,7 @@ jobs:
         with:
           node-version: '18.x'
           cache: 'npm'
+          cache-dependency-path: './medi-connect-backend/package-lock.json'
 
       - name: Install dependencies (Backend)
         working-directory: ./medi-connect-backend
@@ -110,6 +112,7 @@ jobs:
         with:
           node-version: '18.x'
           cache: 'npm'
+          cache-dependency-path: './medi-connect-frontend/package-lock.json'
 
       - name: Install dependencies (Frontend)
         working-directory: ./medi-connect-frontend
@@ -209,6 +212,7 @@ jobs:
         with:
           node-version: '18.x'
           cache: 'npm'
+          cache-dependency-path: './medi-connect-backend/package-lock.json'
 
       - name: Install backend dependencies
         working-directory: ./medi-connect-backend

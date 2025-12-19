@@ -1,0 +1,584 @@
+openapi: 3.0.0
+info:
+  title: MediConnect Healthcare API
+  version: 1.0.0
+  description: |
+    Comprehensive RESTful API for the MediConnect healthcare platform.
+    Handles authentication, appointment scheduling, and clinical note management
+    with HIPAA-compliant security controls and role-based access.
+
+  contact:
+    name: MediConnect Support
+    email: support@mediconnect.health
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+  - url: https://api.mediconnect.health
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User registration and login endpoints
+  - name: Appointments
+    description: Appointment scheduling and retrieval
+  - name: Clinical Notes
+    description: Clinical note management
+  - name: Doctors
+    description: Doctor directory and information
+  - name: Users
+    description: User profile operations
+
+paths:
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: |
+        Create a new user account as either PATIENT or DOCTOR.
+        Doctors must provide specialization. Passwords are hashed and never stored in plain text.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            examples:
+              PatientExample:
+                value:
+                  name: John Doe
+                  email: john@example.com
+                  password: SecurePassword123!
+                  role: PATIENT
+              DoctorExample:
+                value:
+                  name: Dr. Jane Smith
+                  email: jane@example.com
+                  password: SecurePassword123!
+                  role: DOCTOR
+                  specialization: Cardiologist
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '400':
+          description: Validation error - invalid input format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: VALIDATION_ERROR
+                message: 'Invalid email format'
+                statusCode: 400
+                timestamp: '2024-01-15T10:30:00Z'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: ALREADY_EXISTS
+                message: 'User with email already exists'
+                statusCode: 409
+                timestamp: '2024-01-15T10:30:00Z'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user and obtain JWT token
+      description: |
+        Authenticate with email and password to receive a JWT token.
+        Token should be included in subsequent requests via Authorization header.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: john@example.com
+              password: SecurePassword123!
+      responses:
+        '200':
+          description: Login successful - token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                expiresIn: 3600
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                code: INVALID_CREDENTIALS
+                message: 'Invalid email or password'
+                statusCode: 401
+                timestamp: '2024-01-15T10:30:00Z'
+
+  /appointments/patient:
+    post:
+      tags:
+        - Appointments
+      summary: Create appointment (Patient)
+      description: |
+        Schedule a new appointment with a doctor.
+        Appointment date must be in the future.
+        Requires PATIENT role.
+      operationId: createAppointment
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAppointmentRequest'
+            example:
+              doctorId: 550e8400-e29b-41d4-a716-446655440001
+              appointmentDate: '2024-02-15T14:00:00Z'
+              reason: General checkup and consultation
+      responses:
+        '201':
+          description: Appointment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppointmentResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /appointments/patient/upcoming:
+    get:
+      tags:
+        - Appointments
+      summary: Get upcoming appointments (Patient)
+      description: |
+        Retrieve list of upcoming appointments for the authenticated patient.
+        Appointments are sorted by date.
+        Requires PATIENT role.
+      operationId: getUpcomingAppointmentsPatient
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of upcoming appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /appointments/doctor/upcoming:
+    get:
+      tags:
+        - Appointments
+      summary: Get upcoming appointments (Doctor)
+      description: |
+        Retrieve list of upcoming appointments for the authenticated doctor.
+        Appointments with this doctor are sorted by date.
+        Requires DOCTOR role.
+      operationId: getUpcomingAppointmentsDoctor
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of upcoming appointments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AppointmentResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - requires DOCTOR role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /notes:
+    post:
+      tags:
+        - Clinical Notes
+      summary: Create clinical note
+      description: |
+        Create a clinical note for an appointment.
+        Only the doctor assigned to the appointment can create notes.
+        Requires DOCTOR role.
+        Note content must be between 10 and 10,000 characters.
+      operationId: createNote
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNoteRequest'
+            example:
+              appointmentId: 550e8400-e29b-41d4-a716-446655440002
+              content: |
+                Patient presents with chief complaint of chest pain.
+                Vital signs stable. EKG shows normal sinus rhythm.
+                Prescribed atorvastatin 20mg daily.
+                Follow-up in 4 weeks.
+      responses:
+        '201':
+          description: Clinical note created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions or not appointment owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /notes/{appointmentId}:
+    get:
+      tags:
+        - Clinical Notes
+      summary: Get clinical notes for appointment
+      description: |
+        Retrieve all clinical notes for a specific appointment.
+        Patients can only view notes for their own appointments.
+        Doctors can view notes for their appointments.
+      operationId: getNotesForAppointment
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: appointmentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: The appointment ID
+      responses:
+        '200':
+          description: List of clinical notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NoteResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /doctors:
+    get:
+      tags:
+        - Doctors
+      summary: Get all doctors
+      description: |
+        Retrieve a list of all available doctors with their specializations.
+        Public endpoint accessible to all authenticated users.
+      operationId: getAllDoctors
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of doctors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DoctorResponse'
+        '401':
+          description: Unauthorized - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token obtained from login endpoint.
+        Include in request header: Authorization: Bearer <token>
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+        - role
+      properties:
+        name:
+          type: string
+          minLength: 2
+          maxLength: 255
+          description: Full name of the user
+          example: John Doe
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          description: Email address (must be unique)
+          example: john@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: Password (at least 8 characters)
+          example: SecurePassword123!
+        role:
+          type: string
+          enum: [PATIENT, DOCTOR]
+          description: User role
+          example: PATIENT
+        specialization:
+          type: string
+          description: Medical specialization (required if role is DOCTOR)
+          example: Cardiologist
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: john@example.com
+        password:
+          type: string
+          description: User password
+          example: SecurePassword123!
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [PATIENT, DOCTOR]
+        specialization:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT access token
+        expiresIn:
+          type: integer
+          description: Token expiration time in seconds
+          example: 3600
+
+    CreateAppointmentRequest:
+      type: object
+      required:
+        - doctorId
+        - appointmentDate
+      properties:
+        doctorId:
+          type: string
+          format: uuid
+          description: ID of the doctor
+        appointmentDate:
+          type: string
+          format: date-time
+          description: Appointment date and time (must be in the future)
+        reason:
+          type: string
+          minLength: 5
+          maxLength: 500
+          description: Reason for appointment
+
+    AppointmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        appointmentDate:
+          type: string
+          format: date-time
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [SCHEDULED, COMPLETED, CANCELLED]
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateNoteRequest:
+      type: object
+      required:
+        - appointmentId
+        - content
+      properties:
+        appointmentId:
+          type: string
+          format: uuid
+          description: ID of the appointment
+        content:
+          type: string
+          minLength: 10
+          maxLength: 10000
+          description: Clinical note content
+
+    NoteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        appointmentId:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        doctorId:
+          type: string
+          format: uuid
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    DoctorResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        specialization:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          enum:
+            - INVALID_CREDENTIALS
+            - TOKEN_EXPIRED
+            - UNAUTHORIZED
+            - VALIDATION_ERROR
+            - NOT_FOUND
+            - ALREADY_EXISTS
+            - CONFLICT
+            - INTERNAL_ERROR
+            - DATABASE_ERROR
+            - SERVICE_UNAVAILABLE
+        message:
+          type: string
+          description: Human-readable error message
+        statusCode:
+          type: integer
+          description: HTTP status code
+        timestamp:
+          type: string
+          format: date-time
+          description: Error occurrence timestamp
+        correlationId:
+          type: string
+          description: Unique request identifier for tracing

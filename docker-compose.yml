@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: mediconnect-postgres
+    environment:
+      POSTGRES_USER: mediconnect
+      POSTGRES_PASSWORD: mediconnect_secure_password
+      POSTGRES_DB: mediconnect
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mediconnect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mediconnect
+
+  # Backend API
+  backend:
+    build:
+      context: ./medi-connect-backend
+      dockerfile: Dockerfile
+    container_name: mediconnect-backend
+    environment:
+      DATABASE_URL: postgresql://mediconnect:mediconnect_secure_password@postgres:5432/mediconnect
+      NODE_ENV: production
+      JWT_SECRET: your-secret-key-change-in-production
+      JWT_EXPIRY: 3600
+      PORT: 5000
+      CORS_ORIGIN: http://localhost:3000
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./medi-connect-backend/prisma:/app/prisma
+    networks:
+      - mediconnect
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./medi-connect-frontend
+      dockerfile: Dockerfile
+    container_name: mediconnect-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:5000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - mediconnect
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  mediconnect:
+    driver: bridge
